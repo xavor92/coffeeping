@@ -1,0 +1,8 @@
+// template file for password container
+
+const char* mqtt_server = "someserver";
+const char* mqtt_user = "somechannel";
+const char* mqtt_password = "somepassword";
+const char* mqtt_channel = "sometopic";
+const char* mqtt_indentifier_base = "BaseNameForSubscribers";
+const int mqtt_port = 12345;
