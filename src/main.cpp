@@ -8,6 +8,32 @@ const uint16_t PixelCount = 5;
 const uint8_t PixelPin = 2;
 const unsigned int colorSaturation = 128;
 
+typedef struct timed_callback {
+  unsigned long time_ms;
+  void (*callback)(void);
+} timed_callback;
+
+enum callback_indices {
+  LED_OFF = 0,
+  MAX_CALLBACKS,
+};
+
+timed_callback callback_list[MAX_CALLBACKS];
+
+void handle_callbacks() {
+  Serial.println(__func__);
+  for (int i = 0; i < MAX_CALLBACKS; i++) {
+    Serial.print("Callback "); Serial.println(i);
+    if (callback_list[i].time_ms && callback_list[i].time_ms < millis()) {
+      Serial.print("time_ms "); Serial.println(callback_list[i].time_ms);
+      callback_list[i].callback();
+      callback_list[i].time_ms = 0;
+    } else {
+      Serial.println("Empty");
+    }
+  }
+}
+
 char hostname[128];
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -27,7 +53,16 @@ void init_hostname() {
   Serial.println(hostname);
 }
 
+void turn_led_off() {
+  Serial.println(__func__);
+  strip.SetPixelColor(3, black);
+  strip.Show();
+}
+
 void mqtt_handle_message_coffee() {
+  Serial.println(__func__);
+  callback_list[LED_OFF].time_ms = millis() + 1000;
+  callback_list[LED_OFF].callback = turn_led_off;
   strip.SetPixelColor(3, red);
   strip.Show();
 }
@@ -90,4 +125,5 @@ void loop() {
   if(!client.connected())
     mqtt_connect(&client, hostname);
   client.loop();
+  handle_callbacks();
 }
