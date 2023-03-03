@@ -7,6 +7,7 @@
 const uint16_t PixelCount = 5;
 const uint8_t PixelPin = 2;
 const unsigned int colorSaturation = 128;
+const unsigned long button_timeout = 1000;
 
 typedef struct timed_callback {
   unsigned long time_ms;
@@ -21,15 +22,16 @@ enum callback_indices {
 timed_callback callback_list[MAX_CALLBACKS];
 
 void handle_callbacks() {
-  Serial.println(__func__);
+  // Serial.println(__func__);
   for (int i = 0; i < MAX_CALLBACKS; i++) {
-    Serial.print("Callback "); Serial.println(i);
+    // Serial.print("Callback "); Serial.println(i);
     if (callback_list[i].time_ms && callback_list[i].time_ms < millis()) {
-      Serial.print("time_ms "); Serial.println(callback_list[i].time_ms);
+      // Serial.print("time_ms "); Serial.println(callback_list[i].time_ms);
       callback_list[i].callback();
       callback_list[i].time_ms = 0;
     } else {
-      Serial.println("Empty");
+      ;
+      // Serial.println("Empty");
     }
   }
 }
@@ -45,6 +47,8 @@ RgbColor blue(0, 0, colorSaturation);
 RgbColor white(colorSaturation);
 RgbColor black(0);
 
+bool button_active = true;
+
 void init_hostname() {
   hostname[0] = '\0';
   strcat(hostname, hostname_base);
@@ -55,7 +59,9 @@ void init_hostname() {
 
 void turn_led_off() {
   Serial.println(__func__);
+  strip.SetPixelColor(2, black);
   strip.SetPixelColor(3, black);
+  strip.SetPixelColor(4, black);
   strip.Show();
 }
 
@@ -63,7 +69,9 @@ void mqtt_handle_message_coffee() {
   Serial.println(__func__);
   callback_list[LED_OFF].time_ms = millis() + 1000;
   callback_list[LED_OFF].callback = turn_led_off;
+  strip.SetPixelColor(2, red);
   strip.SetPixelColor(3, red);
+  strip.SetPixelColor(4, red);
   strip.Show();
 }
 
@@ -90,7 +98,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
   message[length] = '\0';
   Serial.println(message);
 
-  if (strcmp(message, "coffee") == 0) {
+  if (strcmp(message, mqtt_keyword) == 0) {
     mqtt_handle_message_coffee();
   }
 }
@@ -98,14 +106,14 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 void setup_wifi() {
   WiFi.setHostname(hostname);
   WiFiManager wifiManager;
-  wifiManager.autoConnect("CoffeeSignal");
+  wifiManager.autoConnect(hostname);
   Serial.println("Connected to Wi-Fi");
 }
 
 void setup_leds() {
   Serial.println("Setting up LEDs");
   strip.Begin();
-  strip.SetPixelColor(0, blue);
+  strip.SetPixelColor(0, green);
   strip.Show();
 }
 
@@ -114,16 +122,28 @@ void setup() {
   init_hostname();
   setup_leds();
   setup_wifi();
-  strip.SetPixelColor(1, blue);
+  strip.SetPixelColor(0, blue);
   strip.Show();
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(mqtt_callback);
+
+  pinMode(0, INPUT);
+  pinMode(35, INPUT);
 }
+
+unsigned long last = 0;
 
 void loop() {
   /* Handle mqtt: Make sure it's still connected and serviced */
   if(!client.connected())
     mqtt_connect(&client, hostname);
   client.loop();
+
+  /* handle programmed callbacks, eg led-off timers */
   handle_callbacks();
+
+  if (!digitalRead(0)) {
+    Serial.println("Sending a event!");
+    client.publish(mqtt_channel, mqtt_keyword);
+  }
 }
